@@ -81,6 +81,10 @@ contract MyStrategy is BaseStrategy {
 
         // keep this to get paid!
         _reportToVault(0);
+        
+        // Use this if your strategy doesn't sell the extra tokens
+        // This will take fees and send the token to the badgerTree
+        _processExtraToken(token, amount);
 
         return harvested;
     }
