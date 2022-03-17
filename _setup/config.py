@@ -1,5 +1,5 @@
 ## Token deposited in the vault
-WANT = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
+WANT = "0x41adAc6C1Ff52C5e27568f27998d747F7b69795B"
 
 ## Account that has a lot of want (we will "borrow it" for testing)
 WHALE_ADDRESS = "0xbf72da2bd84c5170618fbe5914b0eca9638d5eb5"
