@@ -2,7 +2,7 @@
 WANT = "0x41adAc6C1Ff52C5e27568f27998d747F7b69795B"
 
 ## Account that has a lot of want (we will "borrow it" for testing)
-WHALE_ADDRESS = "0xbf72da2bd84c5170618fbe5914b0eca9638d5eb5"
+WHALE_ADDRESS = "0x62e2819dd417f3b430b6fa5fd34a49a377a02ac8"
 
 ## Address for Badger Registry, used to fill in default addresses
 ## See: https://github.com/Badger-Finance/badger-registry

@@ -40,12 +40,15 @@ def test_are_you_trying(deployer, vault, strategy, want, governance):
     # assert strategy.balanceOf(want) = depositAmount
 
     ## TEST 2: Is the Harvest profitable?
+    print(strategy)
+    print(governance)
+    print(strategy.harvest)
     harvest = strategy.harvest({"from": governance})
     event = harvest.events["Harvested"]
     # If it doesn't print, we don't want it
     assert event["amount"] > 0
 
-    ## TEST 3: Does the strategy emit anything?
-    event = harvest.events["TreeDistribution"]
-    assert event["token"] == "TOKEN" ## Add token you emit
-    assert event["amount"] > 0 ## We want it to emit something
+    ## TEST 3: Does the strategy emit anything? See test_custom.py for custom test
+    #event = harvest.events["TreeDistribution"]
+    #assert event["token"] == "TOKEN" ## Add token you emit
+    #assert event["amount"] > 0 ## We want it to emit something

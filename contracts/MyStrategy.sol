@@ -189,12 +189,11 @@ contract MyStrategy is BaseStrategy {
 
     function lockSex() internal {
         //Lock for one week
-        bool lock = ISexLocker(SEX_TOKEN).lock(address(this), IERC20Upgradeable(want).balanceOf(SEX_TOKEN), 1); 
+        bool lock = ISexLocker(SEX_LOCKER).lock(address(this), IERC20Upgradeable(SEX_TOKEN).balanceOf(address(this)), 1); 
         if(lock) lastLock = now;
     }
 
     function _harvest() internal override returns (TokenAmount[] memory harvested) {
-        _onlyAuthorizedActors();
         uint256[] memory startingBalances = new uint256[](3);
         startingBalances[0] = IERC20Upgradeable(want).balanceOf(address(this));
         startingBalances[1] = IERC20Upgradeable(SOLID).balanceOf(address(this));
@@ -208,13 +207,15 @@ contract MyStrategy is BaseStrategy {
 
         //Note, the contract code is not currently public for the SEX locker. 
         //It is quite possible that it will be more efficient to call extendLock() instead of withdrawing and re-locking
-        if(lastLock < (now - 604800)){ //If a week has past since the last lock
-            ISexLocker(SEX_TOKEN).initiateExitStream();
-            ISexLocker(SEX_TOKEN).withdrawExitStream();
-            lockSex();
-        }
-        else if(lastLock == 0){
-            lockSex();
+        if(IERC20Upgradeable(SEX_TOKEN).balanceOf(address(this)) > 0){
+            if(lastLock == 0){
+                lockSex();
+            }
+            else if(lastLock < (now - 604800)){ //If a week has past since the last lock
+                ISexLocker(SEX_LOCKER).initiateExitStream();
+                ISexLocker(SEX_LOCKER).withdrawExitStream();
+                lockSex();
+            }
         }
 
         //Trade SEX_TOKEN for want
@@ -238,7 +239,7 @@ contract MyStrategy is BaseStrategy {
         }
 
         //Convert SOLID to want (SOLIDsex)
-        uint256 solidBalance = IERC20Upgradeable(SOLID).balanceOf(address(this));
+        uint256 solidBalance = IERC20Upgradeable(SOLID).balanceOf(address(this));/*
         if (solidBalance > 0) {
             (uint amount, bool stable) = ISolidlyRouter(SOLIDLY_ROUTER).getAmountOut(
                 solidBalance,
@@ -249,7 +250,7 @@ contract MyStrategy is BaseStrategy {
             //Convert or trade, picking the most beneficial one
             if(amount <= solidBalance){
                 //If amount is less, convert instead of trading the tokens
-                IVeDepositor(VE_DEPOSITOR).depositTokens(amount);
+                IVeDepositor(VE_DEPOSITOR).depositTokens(solidBalance);
             }
             else{
                 route[] memory routeArray = new route[](1);
@@ -264,6 +265,9 @@ contract MyStrategy is BaseStrategy {
             }
 
 
+        }*/
+        if (solidBalance > 0) {
+            IVeDepositor(VE_DEPOSITOR).depositTokens(solidBalance);
         }
 
 
@@ -282,9 +286,16 @@ contract MyStrategy is BaseStrategy {
         
 
         harvested = new TokenAmount[](3);
+
         harvested[0] = TokenAmount(want, wantEarned);
-        harvested[1] = TokenAmount(SOLID, afterBalances[1].sub(startingBalances[1]));
-        harvested[2] = TokenAmount(SEX_TOKEN, afterBalances[2].sub(startingBalances[2]));
+
+        uint256 solidEarned = afterBalances[1].sub(startingBalances[1]);
+        harvested[1] = TokenAmount(SOLID, solidEarned);
+        if(solidEarned > 0) _processExtraToken(SOLID, solidEarned);
+
+        uint256 sexEarned = afterBalances[2].sub(startingBalances[2]);
+        harvested[2] = TokenAmount(SEX_TOKEN, sexEarned);
+        if(solidEarned > 0) _processExtraToken(SEX_TOKEN, sexEarned);
 
         
         return harvested;
