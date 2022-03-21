@@ -73,9 +73,9 @@ contract MyStrategy is BaseStrategy {
     address constant SEX_TOKEN = 0xD31Fcd1f7Ba190dBc75354046F6024A9b86014d7;
     address constant SOLID = 0x888EF71766ca594DED1F0FA3AE64eD2941740A20;
 
-    uint256 public lastLock = 0;
+    uint256 public lastLock;
 
-    uint256 public wantPooled = 0;
+    uint256 public wantPooled;
 
     /// @dev Initialize the Strategy with security settings as well as tokens
     /// @notice Proxies will set any non constant variable you declare as default value
@@ -84,6 +84,8 @@ contract MyStrategy is BaseStrategy {
         __BaseStrategy_init(_vault);
         /// @dev Add config here
         want = _wantConfig[0]; //want Solidsex (VE_DEPOSITOR)
+        lastLock = 0;
+        wantPooled = 0;
 
 
         //Approve conversion of SOLID to SOLIDsex
@@ -132,7 +134,7 @@ contract MyStrategy is BaseStrategy {
     /// @notice It's very important all tokens that are meant to be in the strategy to be marked as protected
     /// @notice this provides security guarantees to the depositors they can't be sweeped away
     function getProtectedTokens() public view virtual override returns (address[] memory) {
-        address[] memory protectedTokens = new address[](2);
+        address[] memory protectedTokens = new address[](3);
         protectedTokens[0] = SOLID;
         protectedTokens[1] = VE_DEPOSITOR;
         protectedTokens[2] = SEX_TOKEN;
@@ -145,17 +147,21 @@ contract MyStrategy is BaseStrategy {
         //IVeDepositor(VE_DEPOSITOR).depositTokens(_amount);
         // Stake SOLIDsex
         ISolidSexStaking(STAKING_REWARDS).stake(_amount);
-        wantPooled.add(_amount);
+        wantPooled = wantPooled.add(_amount);
     }
 
     /// @dev Withdraw all funds, this is used for migrations, most of the time for emergency reasons
     function _withdrawAll() internal override {
-        ISolidSexStaking(STAKING_REWARDS).exit();
-        if(lastLock < (now - 604800)){ //If a week has past since the last lock
+        try ISolidSexStaking(STAKING_REWARDS).exit() {
+            wantPooled = 0;
+        }
+        catch Error(string memory) {
+            //Could not exit
+        }
+        if(lastLock < (now - 604800) && lastLock != 0){ //If a week has past since the last lock
             ISexLocker(SEX_TOKEN).initiateExitStream();
             ISexLocker(SEX_TOKEN).withdrawExitStream();
         }
-        wantPooled = 0;
     }
 
     /// @dev Withdraw `_amount` of want, so that it can be sent to the vault / depositor
@@ -174,7 +180,7 @@ contract MyStrategy is BaseStrategy {
             uint256 poolBalance = balanceOfPool();
             if(toWithdraw <= poolBalance){
                 ISolidSexStaking(STAKING_REWARDS).withdraw(toWithdraw);
-                wantPooled.sub(toWithdraw);
+                wantPooled = wantPooled.sub(toWithdraw);
             }
         }
         
@@ -214,12 +220,12 @@ contract MyStrategy is BaseStrategy {
             else if(lastLock < (now - 604800)){ //If a week has past since the last lock
                 ISexLocker(SEX_LOCKER).initiateExitStream();
                 ISexLocker(SEX_LOCKER).withdrawExitStream();
-                lockSex();
+                //lockSex();
             }
         }
 
         //Trade SEX_TOKEN for want
-        uint256 sexBalance = IERC20Upgradeable(SEX_TOKEN).balanceOf(address(this));
+       /*uint256 sexBalance = IERC20Upgradeable(SEX_TOKEN).balanceOf(address(this));
         if (sexBalance > 0) {
             (, bool stable) = ISolidlyRouter(SOLIDLY_ROUTER).getAmountOut(
                 sexBalance,
@@ -236,7 +242,7 @@ contract MyStrategy is BaseStrategy {
                 address(this),
                 now
             );
-        }
+        }*/
 
         //Convert SOLID to want (SOLIDsex)
         uint256 solidBalance = IERC20Upgradeable(SOLID).balanceOf(address(this));/*
@@ -278,11 +284,6 @@ contract MyStrategy is BaseStrategy {
 
         uint256 wantEarned = afterBalances[0].sub(startingBalances[0]);
         _reportToVault(wantEarned);
-
-        //Redeposit want
-        if(wantEarned > 0){
-            _deposit(wantEarned);
-        }
         
 
         harvested = new TokenAmount[](3);
@@ -295,7 +296,12 @@ contract MyStrategy is BaseStrategy {
 
         uint256 sexEarned = afterBalances[2].sub(startingBalances[2]);
         harvested[2] = TokenAmount(SEX_TOKEN, sexEarned);
-        if(solidEarned > 0) _processExtraToken(SEX_TOKEN, sexEarned);
+        if(sexEarned > 0) _processExtraToken(SEX_TOKEN, sexEarned);
+
+        //Redeposit want
+        if(wantEarned > 0){
+            _deposit(wantEarned);
+        }
 
         
         return harvested;
@@ -324,8 +330,8 @@ contract MyStrategy is BaseStrategy {
         );
 
         rewards = new TokenAmount[](3);
-        rewards[0] = TokenAmount(want, 0);
-        rewards[1] = TokenAmount(SOLID, solidRewards); 
+        rewards[0] = TokenAmount(want, solidRewards);
+        rewards[1] = TokenAmount(SOLID, 0); 
         rewards[2] = TokenAmount(SEX_TOKEN, sexRewards); 
 
         return rewards;

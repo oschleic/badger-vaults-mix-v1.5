@@ -10,6 +10,24 @@ from helpers.time import days
   See test_strategy_permissions, for tests at the permissions level
 """
 
+def test_sex_harvesting(deployer, vault, strategy, want, governance):
+    startingBalance = want.balanceOf(deployer)
 
-def test_my_custom_test(deployed):
-    assert False
+    depositAmount = startingBalance // 2
+
+    want.approve(vault, MaxUint256, {"from": deployer})
+    vault.deposit(depositAmount, {"from": deployer})
+
+    vault.earn({"from": governance})
+
+    harvest = strategy.harvest({"from": governance})
+
+    chain.sleep(604800 * 2)  # 2 weeks
+    chain.mine()
+
+    harvest = strategy.harvest({"from": governance})
+
+    ## TEST 3: Does the strategy emit anything? See test_custom.py for custom test
+    event = harvest.events["TreeDistribution"]
+    assert event["token"] == "0xD31Fcd1f7Ba190dBc75354046F6024A9b86014d7" ## Sex token
+    assert event["amount"] > 0 ## We want it to emit something

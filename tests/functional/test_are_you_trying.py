@@ -40,9 +40,6 @@ def test_are_you_trying(deployer, vault, strategy, want, governance):
     # assert strategy.balanceOf(want) = depositAmount
 
     ## TEST 2: Is the Harvest profitable?
-    print(strategy)
-    print(governance)
-    print(strategy.harvest)
     harvest = strategy.harvest({"from": governance})
     event = harvest.events["Harvested"]
     # If it doesn't print, we don't want it

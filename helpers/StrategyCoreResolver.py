@@ -456,7 +456,11 @@ class StrategyCoreResolver:
             "sett", "treasury"
         )
 
-        assert delta_treasury == shares_perf_treasury + shares_management
+        print(delta_treasury)
+        print(shares_perf_treasury)
+        print(approx(delta_treasury, shares_perf_treasury + shares_management, 0.0001))
+
+        assert approx(delta_treasury, shares_perf_treasury + shares_management, 0.0001)
 
     def confirm_tend(self, before, after, tx):
         """
