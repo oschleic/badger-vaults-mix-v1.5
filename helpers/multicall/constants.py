@@ -10,7 +10,7 @@ class Network(IntEnum):
     xDai = 100
     Polygon = 137
     Bsc = 56
-    Fantom = 1337
+    Fantom = 250
     Heco = 128
     Harmony = 1666600000
     Arbitrum = 42161

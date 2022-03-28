@@ -47,11 +47,13 @@ interface ISexLocker{
     function withdrawExitStream() external returns (bool);
     function userBalance(address _users) external view returns(uint256);
     function streamableBalance(address _user) external view returns(uint256);
+    function claimableExitStreamBalance(address _user) external view returns(uint256);
 
 }
 
 interface IFeeDistributor{
-    function feeTokens() external view returns (address[] memory);
+    function feeTokensLength() external view returns (uint256);
+    function feeTokens(uint256 i) external view returns (address);
     function claimable(address _user, address[] calldata _tokens)
         external view returns (uint256[] memory amounts);
     function claim(address _user, address[] calldata _tokens)
@@ -136,25 +138,53 @@ contract MyStrategy is BaseStrategy {
 
     /// @dev Return a list of fee tokens earned from staking sex. While removing want, solid, and sex
     function getFeeTokens() public view returns (address[] memory){
-        address[] memory feeTokens = IFeeDistributor(FEE_DISTRIBUTOR).feeTokens();
+        address[] memory feeTokens = new address[](IFeeDistributor(FEE_DISTRIBUTOR).feeTokensLength());
         uint256 toRemove = 0;
+        uint256 tokenCount = IFeeDistributor(FEE_DISTRIBUTOR).feeTokensLength();
 
         //Remove Solid, SolidSex, and Sex from the array
-        for(uint256 i = 0; i < feeTokens.length - 1 - toRemove; i++){
-            if(feeTokens[i] == want || feeTokens[i] == SOLID || feeTokens[i] == SEX_TOKEN){
-                //Shift to end of the array
-                for(uint256 j = i; j < feeTokens.length - 1 - toRemove; j++){
-                    feeTokens[j] = feeTokens[j + 1];
-                }
+        for(uint256 i = 0; i < tokenCount; i++){
+            address token = IFeeDistributor(FEE_DISTRIBUTOR).feeTokens(i);
+            if(token == want || token == SOLID || token == SEX_TOKEN){
                 toRemove++;
             } 
+            else{
+                feeTokens[i - toRemove] = token;
+            }
         }
+
         address[] memory feeTokensAdjusted = new address[](feeTokens.length - toRemove);
         for(uint256 i = 0; i < feeTokensAdjusted.length; i++){
             feeTokensAdjusted[i] = feeTokens[i];
         }
         
-        return feeTokens;
+        return feeTokensAdjusted;
+    }
+
+
+    function getClaimable() public view returns (address[] memory){
+        address[] memory feeTokens = new address[](IFeeDistributor(FEE_DISTRIBUTOR).feeTokensLength());
+        uint256 toRemove = 0;
+        uint256 tokenCount = IFeeDistributor(FEE_DISTRIBUTOR).feeTokensLength();
+
+        for(uint256 i = 0; i < tokenCount; i++){
+            address token = IFeeDistributor(FEE_DISTRIBUTOR).feeTokens(i);
+            address[] memory tokenArr = new address[](1);
+            tokenArr[0] = token;
+            if(IFeeDistributor(FEE_DISTRIBUTOR).claimable(address(this), tokenArr)[0] > 0){
+                feeTokens[i - toRemove] = token;
+            }
+            else{
+                toRemove++;
+            }
+        }
+
+        address[] memory feeTokensAdjusted = new address[](feeTokens.length - toRemove);
+        for(uint256 i = 0; i < feeTokensAdjusted.length; i++){
+            feeTokensAdjusted[i] = feeTokens[i];
+        }
+        
+        return feeTokensAdjusted;
     }
 
     /// @dev Return a list of protected tokens
@@ -230,7 +260,7 @@ contract MyStrategy is BaseStrategy {
 
     /// @dev Claim fees earned from locking sex token
     function claimFees() internal {
-        address[] memory feeTokens = IFeeDistributor(FEE_DISTRIBUTOR).feeTokens();
+        address[] memory feeTokens = getClaimable();
         IFeeDistributor(FEE_DISTRIBUTOR).claim(address(this), feeTokens);
     }
 
@@ -275,19 +305,22 @@ contract MyStrategy is BaseStrategy {
         ISolidSexStaking(STAKING_REWARDS).getReward();
 
 
+        if(lastLock == 0 && IERC20Upgradeable(SEX_TOKEN).balanceOf(address(this)) > 0){
+            lockSex();
+        }
+        else if(lastLock != 0 && lastLock < (now - 604800)){ //If a week has past since the last lock
+            claimFees();
+            if(IERC20Upgradeable(SEX_TOKEN).balanceOf(address(this)) > 0){
+                lockSex();
+            }
+        }
 
-        //Note, the contract code is not currently public for the SEX locker. 
-        //It is quite possible that it will be more efficient to call extendLock() instead of withdrawing and re-locking
-        if(IERC20Upgradeable(SEX_TOKEN).balanceOf(address(this)) > 0){
-            if(lastLock == 0){
-                lockSex();
-            }
-            else if(lastLock < (now - 604800)){ //If a week has past since the last lock
-                ISexLocker(SEX_LOCKER).initiateExitStream();
-                ISexLocker(SEX_LOCKER).withdrawExitStream();
-                claimFees();
-                lockSex();
-            }
+        if(ISexLocker(SEX_LOCKER).streamableBalance(address(this)) > 0){
+            ISexLocker(SEX_LOCKER).initiateExitStream();
+        }
+
+        if(ISexLocker(SEX_LOCKER).claimableExitStreamBalance(address(this)) > 0){
+            ISexLocker(SEX_LOCKER).withdrawExitStream();
         }
 
         //Convert SOLID to want (SOLIDsex)
