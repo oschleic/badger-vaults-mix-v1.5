@@ -1,3 +1,23 @@
+# Solidex Locking Strategy
+![Strategy diagram](diagram.jpg)
+## How it works
+
+  1. User deposits SOLIDsex into the vault
+  2. SOLIDsex is staked -> earns SOLID and SEX
+  3. SOLID is converted back to SOLIDsex and staked again
+  4. SEX gets locked weekly
+  5. Locked SEX earns fees weekly from solidex
+
+## Helpful info
+
+[Solidex github repo](https://github.com/solidex-fantom)
+
+## Potential problems and concerns
+
+  - SEX can get locked in the contract during a migration
+  - Contract addresses can only be set upon deployment
+
+
 
 # Badger Strategy V1.5 Brownie Mix
 
