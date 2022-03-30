@@ -12,12 +12,18 @@
 
 [Solidex github repo](https://github.com/solidex-fantom)
 
+APR: According to test_does_it_print.py APR is 0.5528285835434117. This does not factor in fee rewards. 
+
 ## Potential problems and concerns
 
   - SEX can get locked in the contract during a migration
   - Contract addresses can only be set upon deployment
 
 ## Tests
+
+```
+ganache-cli --port 8545 --gasLimit 12000000 --accounts 11 --hardfork istanbul --mnemonic brownie --fork https://rpc.ftm.tools --chain.chainId 250 --unlock 0x7fce87e203501c3a035cbbc5f0ee72661976d6e1 --unlock 0x2a651563c9d3af67ae0388a5c8f89b867038089e
+```
 
 ![Tests](testoutput.png)
 
