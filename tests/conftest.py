@@ -33,6 +33,10 @@ def deployer():
 def user():
     return accounts[9]
 
+@pytest.fixture
+def randomUser():
+    return accounts[7]
+
 
 ## Fund the account
 @pytest.fixture
@@ -47,6 +51,18 @@ def want(deployer):
     token.transfer(deployer, token.balanceOf(WHALE), {"from": WHALE})
     return token
 
+
+
+
+@pytest.fixture
+def feedist(randomUser):
+    wftm = interface.IERC20Detailed("0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83")
+    fd = interface.IFeeDistributor("0xA5e76B97e12567bbA2e822aC68842097034C55e7")
+    WFTMWHALE = accounts.at("0x2a651563c9d3af67ae0388a5c8f89b867038089e", force=True) ## Address with tons of wftm
+
+    wftm.transfer(randomUser, wftm.balanceOf(WFTMWHALE), {"from": WFTMWHALE})
+    wftm.approve(fd, MaxUint256, {"from": randomUser})
+    return fd
 
 
 
@@ -79,9 +95,6 @@ def proxyAdmin():
     return accounts[6]
 
 
-@pytest.fixture
-def randomUser():
-    return accounts[7]
 
 @pytest.fixture
 def badgerTree():

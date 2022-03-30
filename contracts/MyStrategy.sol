@@ -48,7 +48,6 @@ interface ISexLocker{
     function userBalance(address _users) external view returns(uint256);
     function streamableBalance(address _user) external view returns(uint256);
     function claimableExitStreamBalance(address _user) external view returns(uint256);
-
 }
 
 interface IFeeDistributor{
@@ -69,6 +68,9 @@ contract MyStrategy is BaseStrategy {
     // address public lpComponent; // Token that represents ownership in a pool, not always used
     // address public reward; // Token we farm
 
+event TestEvent(string s);
+
+
     address constant BADGER = 0x3472A5A71965499acd81997a54BBA8D852C6E53d;
     //Spookyswap router for swaps
     address constant SPOOKYSWAP_ROUTER = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
@@ -84,9 +86,8 @@ contract MyStrategy is BaseStrategy {
     address constant SEX_TOKEN = 0xD31Fcd1f7Ba190dBc75354046F6024A9b86014d7;
     //SOLID token
     address constant SOLID = 0x888EF71766ca594DED1F0FA3AE64eD2941740A20;
-
+    //Fee distributor contract
     address constant FEE_DISTRIBUTOR = 0xA5e76B97e12567bbA2e822aC68842097034C55e7;
-
 
     uint256 public lastLock;
 
@@ -108,22 +109,11 @@ contract MyStrategy is BaseStrategy {
             VE_DEPOSITOR,
             type(uint256).max
         );
-
         //Approve staking of SOLIDsex in staking contract
         IERC20Upgradeable(VE_DEPOSITOR).safeApprove(
             STAKING_REWARDS,
             type(uint256).max
         );
-        //Approve transfer of SEX token back to SOLIDsex
-        IERC20Upgradeable(SEX_TOKEN).safeApprove(
-            SOLIDLY_ROUTER,
-            type(uint256).max
-        );
-        IERC20Upgradeable(SOLID).safeApprove(
-            SOLIDLY_ROUTER,
-            type(uint256).max
-        );
-
         //Approve SEX locking
         IERC20Upgradeable(SEX_TOKEN).safeApprove(
             SEX_LOCKER,
@@ -162,6 +152,7 @@ contract MyStrategy is BaseStrategy {
     }
 
 
+    /// @dev Gets an array of address of fee tokens that are claimable
     function getClaimable() public view returns (address[] memory){
         address[] memory feeTokens = new address[](IFeeDistributor(FEE_DISTRIBUTOR).feeTokensLength());
         uint256 toRemove = 0;
@@ -214,15 +205,17 @@ contract MyStrategy is BaseStrategy {
 
     /// @dev Withdraw all funds, this is used for migrations, most of the time for emergency reasons
     function _withdrawAll() internal override {
-        try ISolidSexStaking(STAKING_REWARDS).exit() {
-            wantPooled = 0;
+        ISolidSexStaking(STAKING_REWARDS).getReward();
+        if(wantPooled != 0){
+            ISolidSexStaking(STAKING_REWARDS).withdraw(wantPooled);
         }
-        catch Error(string memory) {
-            //Could not exit
+        wantPooled = 0;
+        // Note, funds can potentially get stuck here
+        if(lastLock != 0 && ISexLocker(SEX_LOCKER).streamableBalance(address(this)) > 0){
+            ISexLocker(SEX_LOCKER).initiateExitStream();
         }
-        if(lastLock < (now - 604800) && lastLock != 0){ //If a week has past since the last lock
-            ISexLocker(SEX_TOKEN).initiateExitStream();
-            ISexLocker(SEX_TOKEN).withdrawExitStream();
+        if(lastLock != 0 && ISexLocker(SEX_LOCKER).claimableExitStreamBalance(address(this)) > 0){
+            ISexLocker(SEX_LOCKER).withdrawExitStream();
         }
     }
 
@@ -264,7 +257,8 @@ contract MyStrategy is BaseStrategy {
         IFeeDistributor(FEE_DISTRIBUTOR).claim(address(this), feeTokens);
     }
 
-    function tokenBalances() internal view returns (TokenAmount[] memory balances){
+    /// @dev Used by harvest to get current token balances of this contract
+    function tokenBalances() public view returns (TokenAmount[] memory balances){
         address[] memory feeTokens = getFeeTokens();
         balances = new TokenAmount[](3 + feeTokens.length);
         balances[0] = TokenAmount(want, IERC20Upgradeable(want).balanceOf(address(this)));
@@ -279,17 +273,20 @@ contract MyStrategy is BaseStrategy {
         return balances;
     }
 
+    /// @dev Calculates the differences in token amounts, used for reporting harvests to the vault
     function tokenDifferences(TokenAmount[] memory before) internal view returns (TokenAmount[] memory amountAfter) {
         amountAfter = new TokenAmount[](before.length);
         for(uint256 i = 0; i < before.length; i++){
+            (, uint256 amount) = IERC20Upgradeable(before[i].token).balanceOf(address(this)).trySub(before[i].amount);
             amountAfter[i] = TokenAmount(
                 before[i].token,
-                IERC20Upgradeable(before[i].token).balanceOf(address(this)).sub(before[i].amount)
+                amount
             );
         }
         return amountAfter;
     }
 
+    /// @dev Used to report any extra tokens earned to the vault
     function reportExtraTokens(TokenAmount[] memory tokens) internal {
         for(uint256 i = 1; i < tokens.length; i++){
             if(tokens[i].amount > 0){
@@ -301,9 +298,8 @@ contract MyStrategy is BaseStrategy {
     function _harvest() internal override returns (TokenAmount[] memory harvested) {
         TokenAmount[] memory startingBalances = tokenBalances();
 
-        //Claim SEX and want (SOLID) from staked SOLIDsex
+        //Claim SEX and want from staked SOLIDsex
         ISolidSexStaking(STAKING_REWARDS).getReward();
-
 
         if(lastLock == 0 && IERC20Upgradeable(SEX_TOKEN).balanceOf(address(this)) > 0){
             lockSex();
@@ -315,56 +311,30 @@ contract MyStrategy is BaseStrategy {
             }
         }
 
-        if(ISexLocker(SEX_LOCKER).streamableBalance(address(this)) > 0){
+        if(lastLock != 0 && ISexLocker(SEX_LOCKER).streamableBalance(address(this)) > 0){
             ISexLocker(SEX_LOCKER).initiateExitStream();
         }
 
-        if(ISexLocker(SEX_LOCKER).claimableExitStreamBalance(address(this)) > 0){
+        if(lastLock != 0 && ISexLocker(SEX_LOCKER).claimableExitStreamBalance(address(this)) > 0){
             ISexLocker(SEX_LOCKER).withdrawExitStream();
         }
 
-        //Convert SOLID to want (SOLIDsex)
-        uint256 solidBalance = IERC20Upgradeable(SOLID).balanceOf(address(this));/*
-        if (solidBalance > 0) {
-            (uint amount, bool stable) = ISolidlyRouter(SOLIDLY_ROUTER).getAmountOut(
-                solidBalance,
-                address(SOLID),
-                address(want)
-            );
-
-            //Convert or trade, picking the most beneficial one
-            if(amount <= solidBalance){
-                //If amount is less, convert instead of trading the tokens
-                IVeDepositor(VE_DEPOSITOR).depositTokens(solidBalance);
-            }
-            else{
-                route[] memory routeArray = new route[](1);
-                routeArray[0] = route(address(SOLID), address(want), stable);
-                ISolidlyRouter(SOLIDLY_ROUTER).swapExactTokensForTokens(
-                    solidBalance,
-                    0, 
-                    routeArray,
-                    address(this),
-                    now
-                );
-            }
-
-
-        }*/
-        if (solidBalance > 0) {
-            IVeDepositor(VE_DEPOSITOR).depositTokens(solidBalance);
+        //Convert solid to want
+        if (IERC20Upgradeable(SOLID).balanceOf(address(this)) > 0) {
+            IVeDepositor(VE_DEPOSITOR).depositTokens(IERC20Upgradeable(SOLID).balanceOf(address(this)));
         }
+
 
         harvested = tokenDifferences(startingBalances);
 
-
         _reportToVault(harvested[0].amount);
-        
+
         reportExtraTokens(harvested);
 
+
         //Redeposit want
-        if(harvested[0].amount > 0){
-            _deposit(harvested[0].amount);
+        if(IERC20Upgradeable(want).balanceOf(address(this)) > 0){
+            _deposit(IERC20Upgradeable(want).balanceOf(address(this)));
         }
 
         
@@ -372,7 +342,7 @@ contract MyStrategy is BaseStrategy {
     }
 
 
-    // Example tend is a no-op which returns the values, could also just revert
+    /// @dev Reverts
     function _tend() internal override returns (TokenAmount[] memory tended){
         revert("no-op");
     }
@@ -382,7 +352,7 @@ contract MyStrategy is BaseStrategy {
         return wantPooled;
     }
 
-
+    /// @dev Returns the fees enarned through locking sex as an array of TokenAmounts
     function feesAccured() public view returns (TokenAmount[] memory){
         address[] memory feeTokens = getFeeTokens();
         uint256[] memory amounts = IFeeDistributor(FEE_DISTRIBUTOR).claimable(address(this), feeTokens);
