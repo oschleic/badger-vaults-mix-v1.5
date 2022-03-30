@@ -17,6 +17,9 @@
   - SEX can get locked in the contract during a migration
   - Contract addresses can only be set upon deployment
 
+## Tests
+
+![Tests](testoutput.png)
 
 
 # Badger Strategy V1.5 Brownie Mix
