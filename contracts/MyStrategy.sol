@@ -68,8 +68,6 @@ contract MyStrategy is BaseStrategy {
     // address public lpComponent; // Token that represents ownership in a pool, not always used
     // address public reward; // Token we farm
 
-event TestEvent(string s);
-
 
     address constant BADGER = 0x3472A5A71965499acd81997a54BBA8D852C6E53d;
     //Spookyswap router for swaps
