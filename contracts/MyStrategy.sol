@@ -22,25 +22,6 @@ interface ISolidSexStaking{
     function withdraw(uint256 amount) external;
 }
 
-
-struct route {
-    address from;
-    address to;
-    bool stable;
-}
-interface ISolidlyRouter{
-    function swapExactTokensForTokens(
-    uint amountIn,
-    uint amountOutMin,
-    route[] calldata routes,
-    address to,
-    uint deadline
-) external returns (uint[] memory amounts);
-
-    function getAmountOut(uint amountIn, address tokenIn, address tokenOut) external view returns (uint amount, bool stable);
-
-}
-
 interface ISexLocker{
     function lock(address _user, uint256 _amount, uint256 _weeks) external returns(bool); //Needs approval of SEX
     function initiateExitStream() external returns (bool);
